@@ -1,9 +1,10 @@
+#database.py
 import os
 import sys
 import random
 from datetime import timedelta
 
-from .helpers import fetch_id,call_procedure
+from .helpers import fetch_id,call_procedure,DSN
 from .faker_br import FakerBR
 # ==============================================================================
 # 1. TABELAS DE DOMÍNIO / LOOKUP
@@ -15,9 +16,6 @@ from .faker_br import FakerBR
 
 SEED = 42  # fixo -> massa de dados reprodutível. Use None para variar a cada run.
 
-
-# Alternativa: defina ECOCIENTE_DSN com a connection string completa
-DSN = os.environ.get("ECOCIENTE_DSN")
 
 # ---- Volumetria da carga --------------------------------
 N_CONDOMINIOS_RESIDENCIAL = 4
@@ -422,7 +420,7 @@ def criar_agendamento(cur, condominio_id, cooperativa_id, status_agendamento_id,
                (condominio_id, cooperativa_id, status_agendamento_id, data_inicio, data_fim, possui_recorrencia)
            VALUES (%s, %s, %s, %s, %s, %s)
            RETURNING id_agendamento_coleta""",
-        (condominio_id, cooperativa_id, status_agendamento_id, data_inicio, data_fim, False if not recorrente else None),
+        (condominio_id, cooperativa_id, status_agendamento_id, data_inicio, data_fim, recorrente),
     )
 
 
@@ -435,13 +433,15 @@ def criar_recorrencia(cur, agendamento_coleta_id, dia_semana_id):
 
 
 def criar_visita(cur, agendamento_coleta_id, data_visita):
+    foi_realizada = False  # inicialmente, a visita é criada como não realizada. A confirmação (realizada ou não) só acontece depois, via sp_confirmar_passagem_cooperativa.
+    houve_confirmacao = False  # inicialmente, a visita é criada como sem confirmação prévia. A confirmação (houve ou não) só acontece depois, via sp_confirmar_passagem_cooperativa.
     return fetch_id(
         cur,
         """INSERT INTO visitas_coletas
                (agendamento_coleta_id, data_visita, foi_realizada, houve_confirmacao, confirmado_em, observacao)
-           VALUES (%s, %s, NULL, NULL, NULL, NULL)
+           VALUES (%s, %s, %s, %s, NULL, NULL)
            RETURNING id_visita_coleta""",
-        (agendamento_coleta_id, data_visita),
+        (agendamento_coleta_id, data_visita,foi_realizada,houve_confirmacao),
     )
 
 
@@ -612,4 +612,38 @@ def criar_bonus_pontuacao(cur, usuario_id, condominio_id, sindico_usuario_id):
            VALUES (%s, %s, 'bonus', %s, %s, 'bonus_manual', %s)""",
         (usuario_id, condominio_id, pontos, sindico_usuario_id, fk.date_time_between(60, 0)),
     )
+# ====================================
+# ATOMICIDADE
+# ===========================================
+def limpar_dados_banco(cur):
+    tabelas = [
+        "notificacoes",
+        "auditoria_log",
+        "historico_pontuacao",
+        "postagens",
+        "avaliacoes_visitas_coletas",
+        "visitas_coletas",
+        "recorrencias_agendamentos",
+        "agendamentos_coletas",
+        "usuarios_cursos",
+        "aulas",
+        "cursos",
+        "avisos",
+        "usuarios_condominios",
+        "moradores",
+        "unidades",
+        "torres",
+        "condominios",
+        "cooperativas",
+        "pontos_coletas",
+        "cooperativas_categorias_materiais",
+        "pontos_coletas_categorias",
+        "enderecos",
+        "telefones",
+        "usuarios"
+    ]
 
+    for tabela in tabelas:
+        cur.execute(f"TRUNCATE TABLE {tabela} CASCADE")
+
+    print("Banco limpo: dados removidos, estrutura mantida.")

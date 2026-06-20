@@ -1,4 +1,5 @@
 import os
+from dotenv import load_dotenv
 import sys
 
 try:
@@ -8,18 +9,19 @@ except ImportError:
     print("    pip install psycopg2-binary --break-system-packages")
     sys.exit(1)
 
-
+load_dotenv()
 # ==============================================================================
 # CONFIGURAÇÃO
 # ================================
 
 DB_CONFIG = dict(
-    host=os.environ.get("ECOCIENTE_DB_HOST", "localhost"),
-    port=os.environ.get("ECOCIENTE_DB_PORT", "5432"),
-    dbname=os.environ.get("ECOCIENTE_DB_NAME", "ecociente"),
-    user=os.environ.get("ECOCIENTE_DB_USER", "postgres"),
-    password=os.environ.get("ECOCIENTE_DB_PASSWORD", "postgres"),
-)
+    host=os.environ.get("ECOCIENTE_DB_HOST"),
+    port=os.environ.get("ECOCIENTE_DB_PORT"),
+    dbname=os.environ.get("ECOCIENTE_DB_NAME"),
+    user=os.environ.get("ECOCIENTE_DB_USER"),
+    password=os.environ.get("ECOCIENTE_DB_PASSWORD"),
+    sslmode=os.environ.get("ECOCIENTE_DB_SSLMODE"))
+print('[debug]',DB_CONFIG)
 #  connection string completa
 DSN = os.environ.get("ECOCIENTE_DSN")
 
