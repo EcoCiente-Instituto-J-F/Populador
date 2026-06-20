@@ -26,7 +26,7 @@ class FakerBR:
             "Castro","Pereira","Nunes","Gomes","Oliveira","Barbosa","Martins","Cardoso",
             "Ramos","Torres","Pinto","Moreira","Freitas","Hugo","Correia","Azevedo",
             "Borges","Melo","Cunha","Ribeiro","Lil","Santana","Wada","Araújo","Lopes","Dias","Nascimento",
-            "Vasconcelos","Teixeira","Campos","Werner","Figueiredo","Duarte","Silveira","Jabá",
+            "Vasconcelos","Teixeira","Campos","Vale","Werner","Figueiredo","Duarte","Silveira","Jabá",
             "Braga","Cavalcante","Esteves","Guimarães","Fontes","Coelho","Machado",
             "Prado","Rezende","Bastos","Leite","Carvalho","Vieira","Andrade","Monteiro",
             "Queiroz","Macedo","Saraiva","Paiva","Rodrigues","Batista","Xavier","Nogueira",

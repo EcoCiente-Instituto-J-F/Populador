@@ -65,7 +65,6 @@ def popular_tipos_usuarios(cur):
         )
     return ids
 
-
 def popular_tipos_condominios(cur):
     tipos = [
         ("Residencial", "Condomínio residencial (torres/unidades habitacionais)."),

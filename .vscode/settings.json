@@ -1,0 +1,5 @@
+{
+    "files.autoSave": "onFocusChange",
+    "editor.suggest.selectionMode": "whenQuickSuggestion",
+    "python.analysis.inlayHints.pytestParameters": true
+}
