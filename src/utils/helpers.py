@@ -21,7 +21,6 @@ DB_CONFIG = dict(
     user=os.environ.get("ECOCIENTE_DB_USER"),
     password=os.environ.get("ECOCIENTE_DB_PASSWORD"),
     sslmode=os.environ.get("ECOCIENTE_DB_SSLMODE"))
-print('[debug]',DB_CONFIG)
 #  connection string completa
 DSN = os.environ.get("ECOCIENTE_DSN")
 

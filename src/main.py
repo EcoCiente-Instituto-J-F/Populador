@@ -121,8 +121,7 @@ def main():
 
     conn = get_connection()
     cur = conn.cursor()
-    print('[debug] connection',cur)
-    print('[debug] cursor',cur)
+
     print("\n[1/9] Tabelas de domínio / lookup...")
     try:
         tipos_usuario = popular_tipos_usuarios(cur)
@@ -248,7 +247,6 @@ def main():
                     no_passado = fk.boolean(70)
                     data_visita = fk.date_time_between(120, 1) if no_passado else fk.date_time_future(60)
                     visita_id = criar_visita(cur, agendamento_id, data_visita)
-                    print('[debug] criar visita',criar_visita.__code__.co_filename)
 
                     if no_passado:
                         confirmou = fk.boolean(80)
