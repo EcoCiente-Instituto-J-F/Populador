@@ -30,6 +30,15 @@ sp_validar_postagem e sp_confirmar_passagem_cooperativa fazem COMMIT dentro
 do próprio corpo PL/pgSQL (procedure top-level), o que só é seguro fora de
 um bloco de transação aberto manualmente pelo client.
 
+Mudanças v2 (class table inheritance):
+    - Síndicos: criar_usuario → criar_subtipo_sindico → retorna id_sindico
+      (usado como FK em condominios.sindico_id, não mais o usuario_id direto).
+    - Usuários Comuns: criar_usuario → criar_subtipo_usuario_comum.
+    - criar_condominio: parâmetro renomeado de sindico_usuario_id → sindico_id,
+      que agora recebe o id_sindico da tabela sindicos.
+    - criar_cooperativa: não recebe mais coop_nome como parâmetro externo;
+      retorna (cooperativa_id, nome) diretamente.
+
 Instalação:
     pip install psycopg2-binary --break-system-packages
 
@@ -55,6 +64,8 @@ from utils.database import (
     popular_regras_pontuacao,
     criar_endereco,
     criar_usuario,
+    criar_subtipo_sindico,          # [NOVO v2] subtipo síndico
+    criar_subtipo_usuario_comum,    # [NOVO v2] subtipo usuário comum
     criar_condominio,
     criar_torre,
     criar_unidade,
@@ -121,7 +132,7 @@ def main():
 
     conn = get_connection()
     cur = conn.cursor()
-
+    limpar_dados_banco(cur=cur)
     print("\n[1/9] Tabelas de domínio / lookup...")
     try:
         tipos_usuario = popular_tipos_usuarios(cur)
@@ -140,13 +151,16 @@ def main():
         print("[3/9] Usuários comuns...")
         usuarios_comuns = []
         for _ in range(N_USUARIOS_COMUM):
+            # [v2] criar_usuario → criar_subtipo_usuario_comum
             uid, _ = criar_usuario(cur, tipos_usuario["Usuário Comum"])
+            criar_subtipo_usuario_comum(cur, uid)
             usuarios_comuns.append(uid)
 
         print("[4/9] Cooperativas + pontos de coleta...")
         cooperativas = []  # (cooperativa_id, nome, usuario_id)
         for _ in range(N_COOPERATIVAS):
             u_coop, _ = criar_usuario(cur, tipos_usuario["Cooperativa"])
+            # [v2] criar_cooperativa não recebe mais nome externo; retorna (id, nome)
             coop_id, coop_nome = criar_cooperativa(cur, u_coop)
             vincular_categorias_cooperativa(cur, coop_id, categorias_reciclaveis)
             for _ in range(rng.randint(*PONTOS_COLETA_POR_COOPERATIVA)):
@@ -155,14 +169,22 @@ def main():
             cooperativas.append((coop_id, coop_nome, u_coop))
 
         print("[5/9] Condomínios residenciais + torres + unidades + moradores...")
-        ocupantes = []  # lista de dicts: usuario_id, condominio_id, morador_id
+        # [v2] ocupantes agora carrega sindico_id (id_sindico) além de sindico_usuario_id
+        ocupantes = []  # lista de dicts: usuario_id, condominio_id, morador_id,
+                        #                 sindico_usuario_id, sindico_id
         condominios_residenciais = []
         for i in range(N_CONDOMINIOS_RESIDENCIAL):
-            sindico_id, sindico_nome = criar_usuario(cur, tipos_usuario["Síndico Residencial"])
+            sindico_usuario_id, sindico_nome = criar_usuario(cur, tipos_usuario["Síndico Residencial"])
+            # [v2] registra o subtipo e obtém id_sindico para usar como FK em condominios
+            sindico_id = criar_subtipo_sindico(cur, sindico_usuario_id)
+
             nome_condominio = f"Condomínio {fk.street_name()}"
-            condominio_id = criar_condominio(cur, tipos_condominio["Residencial"], sindico_id, nome_condominio, comercial=False)
+            # [v2] criar_condominio recebe sindico_id (sindicos.id_sindico)
+            condominio_id = criar_condominio(
+                cur, tipos_condominio["Residencial"], sindico_id, nome_condominio, comercial=False
+            )
             condominios_residenciais.append(condominio_id)
-        
+
             for t in range(rng.randint(*TORRES_POR_RESIDENCIAL)):
                 torre_id = criar_torre(cur, condominio_id, f"Torre {chr(65 + t)}")
                 for u in range(rng.randint(*UNIDADES_POR_TORRE)):
@@ -172,20 +194,33 @@ def main():
                         tipo_ocupante = tipos_usuario["Morador Residencial"]
                         uid, _ = criar_usuario(cur, tipo_ocupante)
                         morador_id = criar_morador(cur, uid, unidade_id)
-                        criar_vinculo_condominio(cur, uid, condominio_id, aprovado_por_usuario_id=sindico_id)
-                        ocupantes.append({"usuario_id": uid, "condominio_id": condominio_id, "morador_id": morador_id, "sindico_id": sindico_id})
+                        # aprovado_por_usuario_id ainda referencia usuarios.id_usuario
+                        criar_vinculo_condominio(cur, uid, condominio_id, aprovado_por_usuario_id=sindico_usuario_id)
+                        ocupantes.append({
+                            "usuario_id": uid,
+                            "condominio_id": condominio_id,
+                            "morador_id": morador_id,
+                            "sindico_usuario_id": sindico_usuario_id,  # para avisos / vínculos
+                            "sindico_id": sindico_id,                   # FK de condominios [v2]
+                        })
 
-            # avisos do síndico
+            # avisos do síndico — criado_por_usuario_id aponta para usuarios diretamente
             for _ in range(rng.randint(2, 5)):
-                criar_aviso(cur, condominio_id, sindico_id, fk.random_element(list(tipos_aviso.values())))
+                criar_aviso(cur, condominio_id, sindico_usuario_id, fk.random_element(list(tipos_aviso.values())))
 
         print("[6/9] Condomínios comerciais + unidades + usuários comerciais...")
         condominios_comerciais = []
 
         for i in range(N_CONDOMINIOS_COMERCIAL):
-            sindico_id, _ = criar_usuario(cur, tipos_usuario["Síndico Comercial"])
+            sindico_usuario_id, _ = criar_usuario(cur, tipos_usuario["Síndico Comercial"])
+            # [v2] subtipo síndico → id_sindico para FK em condominios
+            sindico_id = criar_subtipo_sindico(cur, sindico_usuario_id)
+
             nome_condominio = f"Edifício Comercial {fk.street_name()}"
-            condominio_id = criar_condominio(cur, tipos_condominio["Comercial"], sindico_id, nome_condominio, comercial=True)
+            # [v2] criar_condominio recebe sindico_id (sindicos.id_sindico)
+            condominio_id = criar_condominio(
+                cur, tipos_condominio["Comercial"], sindico_id, nome_condominio, comercial=True
+            )
             condominios_comerciais.append(condominio_id)
 
             for u in range(rng.randint(*UNIDADES_POR_COMERCIAL)):
@@ -194,11 +229,17 @@ def main():
                 if fk.boolean(CHANCE_UNIDADE_OCUPADA):
                     uid, _ = criar_usuario(cur, tipos_usuario["Usuário Comercial"])
                     morador_id = criar_morador(cur, uid, unidade_id)
-                    criar_vinculo_condominio(cur, uid, condominio_id, aprovado_por_usuario_id=sindico_id)
-                    ocupantes.append({"usuario_id": uid, "condominio_id": condominio_id, "morador_id": morador_id, "sindico_id": sindico_id})
+                    criar_vinculo_condominio(cur, uid, condominio_id, aprovado_por_usuario_id=sindico_usuario_id)
+                    ocupantes.append({
+                        "usuario_id": uid,
+                        "condominio_id": condominio_id,
+                        "morador_id": morador_id,
+                        "sindico_usuario_id": sindico_usuario_id,
+                        "sindico_id": sindico_id,
+                    })
 
             for _ in range(rng.randint(1, 3)):
-                criar_aviso(cur, condominio_id, sindico_id, fk.random_element(list(tipos_aviso.values())))
+                criar_aviso(cur, condominio_id, sindico_usuario_id, fk.random_element(list(tipos_aviso.values())))
 
         todos_condominios = condominios_residenciais + condominios_comerciais
 
@@ -215,17 +256,18 @@ def main():
 
                 sorteio = rng.random()
                 if sorteio < 0.60:
-                    validar_postagem(cur, postagem_id, "A", ocupante["sindico_id"])
+                    # validado_por_usuario_id → usuarios.id_usuario do síndico
+                    validar_postagem(cur, postagem_id, "A", ocupante["sindico_usuario_id"])
                     qtd_aprovadas += 1
                 elif sorteio < 0.85:
-                    validar_postagem(cur, postagem_id, "R", ocupante["sindico_id"])
+                    validar_postagem(cur, postagem_id, "R", ocupante["sindico_usuario_id"])
                     qtd_rejeitadas += 1
                 else:
                     qtd_pendentes += 1  # fica como 'P', simula fila de moderação real
 
             # bônus ocasional do síndico
             if fk.boolean(15):
-                criar_bonus_pontuacao(cur, ocupante["usuario_id"], ocupante["condominio_id"], ocupante["sindico_id"])
+                criar_bonus_pontuacao(cur, ocupante["usuario_id"], ocupante["condominio_id"], ocupante["sindico_usuario_id"])
 
         print(f"      -> postagens: {qtd_aprovadas} aprovadas | {qtd_rejeitadas} rejeitadas | {qtd_pendentes} pendentes")
 
@@ -258,8 +300,9 @@ def main():
                             qtd_visitas_recusadas += 1
 
                         if fk.boolean(70):
+                            # avaliador é o síndico como usuário (usuarios.id_usuario)
                             sindico_da_visita = next(
-                                (o["sindico_id"] for o in ocupantes if o["condominio_id"] == condominio_id), None
+                                (o["sindico_usuario_id"] for o in ocupantes if o["condominio_id"] == condominio_id), None
                             )
                             if sindico_da_visita:
                                 criar_avaliacao_visita(cur, visita_id, sindico_da_visita)
@@ -280,7 +323,7 @@ def main():
         todos_usuarios_para_notificar = set(
             usuarios_comuns
             + [o["usuario_id"] for o in ocupantes]
-            + [o["sindico_id"] for o in ocupantes]
+            + [o["sindico_usuario_id"] for o in ocupantes]  # [v2] chave renomeada
             + [c[2] for c in cooperativas]
         )
         for usuario_id in todos_usuarios_para_notificar:
@@ -291,7 +334,8 @@ def main():
         print("=" * 78)
         tabelas = [
             "tipos_usuarios", "usuarios", "telefones", "notificacoes",
-            "tipos_condominios", "condominios", "moradores", "torres", "unidades",
+            "tipos_condominios", "condominios", "sindicos", "usuarios_comuns",  # [NOVO v2]
+            "moradores", "torres", "unidades",
             "enderecos", "usuarios_condominios", "pontos_coletas", "cooperativas",
             "categorias_residuos", "cooperativas_categorias_materiais",
             "pontos_coletas_categorias", "postagens", "historico_pontuacao",
