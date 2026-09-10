@@ -5,6 +5,7 @@ import random
 import hashlib
 import json
 import os
+import re
 import psycopg2
 from datetime import timedelta
 
@@ -34,6 +35,27 @@ NOTIFICACOES_POR_USUARIO      = (1, 2)
 AGENDAMENTOS_POR_CONDOMINIO   = (1, 2)
 VISITAS_POR_AGENDAMENTO       = (2, 5)
 AULAS_POR_USUARIO             = (1, 3)
+
+
+def gerar_senha_segura(email_usuario: str) -> str:
+    """
+    Gera uma senha de massa de teste respeitando a política:
+    - mínimo 8 caracteres
+    - 1 letra maiúscula
+    - 1 letra minúscula
+    - 1 caractere especial
+
+    A senha gerada é posteriormente armazenada como hash.
+    """
+    base = re.sub(r"[^a-zA-Z0-9]", "", email_usuario.split("@")[0])
+    base = (base[:5] or "Eco") + "A1!"
+    return base + "@Eco"
+
+
+def hash_senha(senha: str) -> str:
+    """Hash determinístico para popular o banco de desenvolvimento."""
+    return "$2b$12$" + hashlib.sha256(senha.encode("utf-8")).hexdigest()[:53]
+
 
 fk  = FakerBR(seed=SEED)
 rng = random.Random(SEED)
