@@ -323,7 +323,7 @@ def main():
             # têm quiz (a última de cada curso âncora) -- adiciona uma delas
             # com 40% de chance para garantir tentativas de quiz de verdade.
             aulas_escolhidas = set(fk.random_elements(todas_aulas, length=rng.randint(*AULAS_POR_USUARIO), unique=True))
-            if quizzes_por_aula and fk.boolean(40):
+            if quizzes_por_aula and fk.boolean(30):
                 aulas_escolhidas.add(fk.random_element(list(quizzes_por_aula.keys())))
             aulas_escolhidas = list(aulas_escolhidas)
             aulas_concluidas = matricular_usuario_em_aulas(cur, usuario_id, aulas_escolhidas)

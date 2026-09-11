@@ -25,16 +25,16 @@ N_COOPERATIVAS              = 3
 N_USUARIOS_COMUM            = 10
 
 TORRES_POR_RESIDENCIAL      = (2, 3)
-MORADORES_POR_TORRE         = (2, 3)
-USUARIOS_POR_COMERCIAL      = (3, 5)
+MORADORES_POR_TORRE         = (3, 5)
+USUARIOS_POR_COMERCIAL      = (5, 7)
 
 PONTOS_COLETA_POR_COOPERATIVA = (2, 3)
-POSTAGENS_POR_OCUPANTE        = (0, 2)
-VOTOS_POR_POSTAGEM            = (5, 9)
+POSTAGENS_POR_OCUPANTE        = (0, 1)
+VOTOS_POR_POSTAGEM            = (5, 8)
 NOTIFICACOES_POR_USUARIO      = (1, 2)
 AGENDAMENTOS_POR_CONDOMINIO   = (1, 2)
 VISITAS_POR_AGENDAMENTO       = (2, 5)
-AULAS_POR_USUARIO             = (1, 3)
+AULAS_POR_USUARIO             = (1, 2)
 
 
 def gerar_senha_segura(email_usuario: str) -> str:
@@ -589,16 +589,17 @@ def simular_votos_postagem(cur, postagem_id, usuario_dono_id, votantes_do_condom
     postagem ao atingir os limiares (+5 aprova / -5 reprova). votantes_do_condominio
     deve conter só usuario_ids com vínculo aprovado=TRUE nesse condomínio.
 
-    Cada postagem sorteia um veredito predominante (70% aprovar / 30%
-    denunciar) e 85% dos votos seguem esse veredito -- assim a maioria das
-    postagens resolve de forma decisiva com poucos votos discordantes, em
-    vez de ficar em_analise por saldo empatado.
+    Cada postagem sorteia um veredito predominante (65% aprovar / 35%
+    denunciar) e 92% dos votos seguem esse veredito -- a maioria das
+    postagens resolve de forma decisiva (mais aprovadas que reprovadas,
+    mas reprovada acontece de verdade), e uma minoria fica em_analise por
+    saldo insuficiente, como esperado num sistema real.
     """
     candidatos = [uid for uid in votantes_do_condominio if uid != usuario_dono_id]
     if not candidatos:
         return
 
-    veredito = "aprovar" if fk.boolean(70) else "denunciar"
+    veredito = "aprovar" if fk.boolean(60) else "denunciar"
     contrario = "denunciar" if veredito == "aprovar" else "aprovar"
 
     minimo = min(VOTOS_POR_POSTAGEM[0], len(candidatos))
@@ -609,7 +610,7 @@ def simular_votos_postagem(cur, postagem_id, usuario_dono_id, votantes_do_condom
 
     votantes = fk.random_elements(candidatos, length=qtd_votos, unique=True)
     for usuario_id in votantes:
-        tipo_voto = veredito if fk.boolean(90) else contrario
+        tipo_voto = veredito if fk.boolean(95) else contrario
         motivo_id = fk.random_element(motivos_denuncia_ids) if tipo_voto == "denunciar" else None
         comentario = fk.sentence(6) if fk.boolean(30) else None
         try:
@@ -722,8 +723,10 @@ def popular_cursos_e_aulas(cur):
 
     cursos_ids = {}
     aulas_por_curso = {}
-    for curso in curriculo["cursos"]:
+    total_cursos = len(curriculo["cursos"])
+    for i, curso in enumerate(curriculo["cursos"], start=1):
         titulo = curso["titulo_curso"]
+        print(f"      curso {i}/{total_cursos}: {titulo}", flush=True)
         cur.execute("SELECT id_curso FROM tb_cursos WHERE titulo_curso = %s", (titulo,))
         row = cur.fetchone()
         if row:
